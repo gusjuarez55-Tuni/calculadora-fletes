@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Fletes - Transporte Isa & Mocho</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet JS & CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #map {
+            height: 380px;
+            width: 100%;
+            border-radius: 1rem;
+            z-index: 10;
+        }
+
+        /* Estilos profesionales para impresión en hoja A4 */
+        @media print {
+            @page {
+                size: A4;
+                margin: 15mm;
+            }
+            body {
+                background: white !important;
+                color: black !important;
+                padding: 0 !important;
+            }
+            .no-print, header, #map, button, #adminModal {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            .print-container {
+                border: 2px solid #333 !important;
+                padding: 2rem !important;
+                border-radius: 0.5rem !important;
+                box-shadow: none !important;
+                background: white !important;
+                color: black !important;
+                width: 100% !important;
+            }
+            .print-text-dark {
+                color: #111827 !important;
+            }
+            .print-border {
+                border-color: #d1d5db !important;
+            }
+        }
+        .print-only {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans pb-10">
+
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 py-4 px-6 mb-6 shadow-lg no-print">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-amber-500 p-3 rounded-xl text-slate-900 font-bold text-xl">
+                    <i class="fa-solid fa-truck-fast"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-white tracking-wide">Calculadora de Fletes</h1>
+                    <p class="text-xs text-slate-400">Sistema de Cotización Interna • Tucumán</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <div class="flex items-center bg-slate-900 p-1.5 rounded-xl border border-slate-700">
+                    <button id="btnIsa" onclick="setCompany('Isa')" class="px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 bg-amber-500 text-slate-950 shadow-md">
+                        Transporte Isa
+                    </button>
+                    <button id="btnMocho" onclick="setCompany('Mocho')" class="px-4 py-2 rounded-lg font-semibold text-sm text-slate-400 hover:text-white transition-all duration-200">
+                        Transporte Mocho
+                    </button>
+                </div>
+
+                <!-- Botón de Administrador (Tarifas) -->
+                <button onclick="openAdminModal()" title="Configuración de Tarifas (Solo Admin)" class="bg-slate-700 hover:bg-slate-600 border border-slate-600 p-2.5 rounded-xl text-amber-400 hover:text-amber-300 transition-all">
+                    <i class="fa-solid fa-lock text-base"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Encabezado exclusivo para Impresión A4 -->
+    <div class="print-only max-w-4xl mx-auto mb-6 text-center border-b pb-4">
+        <h1 id="printTitleCompany" class="text-2xl font-bold text-gray-900">PRESUPUESTO DE FLETE - TRANSPORTE ISA</h1>
+        <p class="text-xs text-gray-500">Documento de Cotización • San Miguel de Tucumán</p>
+        <p id="printDate" class="text-xs text-gray-400 mt-1"></p>
+    </div>
+
+    <main class="max-w-6xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Columna Izquierda: Formulario de Control -->
+        <div class="lg:col-span-6 space-y-6 no-print">
+
+            <!-- Orígenes Rápidos & Direcciones -->
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-xl backdrop-blur-sm">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-amber-400 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-location-dot"></i> Punto de Partida y Destino
+                </h2>
+
+                <!-- Selector de Origen Predeterminado -->
+                <div class="mb-4">
+                    <label class="block text-xs text-slate-400 mb-2">Seleccionar Origen Rápido:</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="setPresetOrigin('deposito')" class="flex items-center justify-center gap-2 bg-slate-700/60 hover:bg-slate-700 border border-slate-600 rounded-xl p-2.5 text-xs font-medium text-slate-200 transition-all">
+                            <i class="fa-solid fa-warehouse text-amber-400"></i> Depósito
+                        </button>
+                        <button onclick="setPresetOrigin('terminal')" class="flex items-center justify-center gap-2 bg-slate-700/60 hover:bg-slate-700 border border-slate-600 rounded-xl p-2.5 text-xs font-medium text-slate-200 transition-all">
+                            <i class="fa-solid fa-building text-amber-400"></i> Suc. Terminal
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Campo Origen -->
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Dirección de Origen</label>
+                    <div class="relative">
+                        <input type="text" id="originInput" value="Marco Avellaneda 1150, San Miguel de Tucumán" 
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 pl-10"
+                            placeholder="Origen...">
+                        <i class="fa-solid fa-circle-dot text-emerald-500 absolute left-3.5 top-3.5 text-xs"></i>
+                    </div>
+                </div>
+
+                <!-- Campo Destino -->
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Dirección de Destino del Cliente</label>
+                    <div class="relative">
+                        <input type="text" id="destinationInput" placeholder="Ej: Av. Aconquija 1000, Yerba Buena" 
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 pl-10">
+                        <i class="fa-solid fa-location-dot text-rose-500 absolute left-3.5 top-3.5 text-xs"></i>
+                    </div>
+                </div>
+
+                <button onclick="calculateRoute()" id="btnCalcRoute" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm">
+                    <i class="fa-solid fa-route"></i> Calcular Ruta y Distancia
+                </button>
+            </div>
+
+            <!-- Ajuste de Parámetros y Bonificación -->
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-xl space-y-4">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders"></i> Parámetros y Bonificación
+                </h2>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- Distancia en KM -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Distancia Ida (Km)</label>
+                        <input type="number" id="kmInput" value="0" min="0" step="0.1" oninput="recalculateTotal()"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500 font-bold">
+                    </div>
+
+                    <!-- Pisos por Escalera -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Subidas de Piso</label>
+                        <div class="flex items-center bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+                            <button onclick="changeFloors(-1)" class="px-3 py-2 text-slate-400 hover:bg-slate-800 text-sm font-bold">-</button>
+                            <input type="number" id="floorsInput" value="0" min="0" readonly class="w-full bg-transparent text-center text-sm font-bold text-white focus:outline-none">
+                            <button onclick="changeFloors(1)" class="px-3 py-2 text-slate-400 hover:bg-slate-800 text-sm font-bold">+</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campo Bonificación / Descuento -->
+                <div class="pt-2 border-t border-slate-700/80">
+                    <label class="block text-xs font-medium text-amber-400 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-tag"></i> Bonificación / Descuento ($)
+                    </label>
+                    <input type="number" id="discountInput" value="0" min="0" step="100" oninput="recalculateTotal()"
+                        class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-amber-300 font-bold focus:outline-none focus:border-amber-500" placeholder="Ej: 2000">
+                </div>
+
+                <!-- Resumen de Reglas Vigentes (Dinámicas) -->
+                <div class="bg-slate-900/60 rounded-xl p-3 border border-slate-700/50 text-xs text-slate-400 space-y-1">
+                    <div class="flex justify-between">
+                        <span>Mínimo de Flete:</span>
+                        <span id="lblMinRate" class="text-slate-200 font-semibold">$15.000</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Valor por Km (ida):</span>
+                        <span id="lblKmRate" class="text-slate-200 font-semibold">$4.000</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Valor por Piso (escalera):</span>
+                        <span id="lblFloorRate" class="text-slate-200 font-semibold">$4.000</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Columna Derecha: Mapa y Cotización -->
+        <div class="lg:col-span-6 space-y-6">
+
+            <!-- Mapa -->
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-xl relative overflow-hidden no-print">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-map-location-dot text-amber-400"></i> Vista Previa del Recorrido
+                    </span>
+                    <span id="routeKmBadge" class="bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold px-2.5 py-1 rounded-full">
+                        0.0 km
+                    </span>
+                </div>
+
+                <div id="map"></div>
+            </div>
+
+            <!-- Desglose Final y Botones de Acción -->
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-xl print-container">
+                <div class="flex justify-between items-end mb-4 pb-4 border-b border-slate-700 print-border">
+                    <div>
+                        <p class="text-xs text-slate-400 print-text-dark uppercase tracking-wider">Total Final a Cobrar</p>
+                        <p id="companyLabel" class="text-xs text-amber-400 print-text-dark font-medium">Transporte Isa</p>
+                    </div>
+                    <div class="text-right">
+                        <p id="totalPrice" class="text-3xl font-extrabold text-amber-400 print-text-dark">$15.000</p>
+                    </div>
+                </div>
+
+                <!-- Detalle visible sólo al imprimir -->
+                <div class="print-only mb-4 space-y-1 text-sm text-gray-800">
+                    <p><strong>Origen:</strong> <span id="printOrigin"></span></p>
+                    <p><strong>Destino:</strong> <span id="printDest"></span></p>
+                </div>
+
+                <!-- Detalle de cálculos -->
+                <div id="calculationDetail" class="text-xs text-slate-300 print-text-dark mb-5 space-y-1 bg-slate-900/50 p-3 rounded-xl border border-slate-700/50 print-border">
+                    <!-- Dinámico -->
+                </div>
+
+                <!-- Botones: WhatsApp e Imprimir / PDF -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 no-print">
+                    <button onclick="sendWhatsApp()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm">
+                        <i class="fa-brands fa-whatsapp text-base"></i> Enviar WhatsApp
+                    </button>
+                    <button onclick="printBudget()" class="w-full bg-slate-700 hover:bg-slate-600 text-amber-400 font-bold py-3 px-4 rounded-xl shadow-lg border border-slate-600 transition-all flex items-center justify-center gap-2 text-sm">
+                        <i class="fa-solid fa-print text-base"></i> Imprimir / PDF (A4)
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Modal de Administración Protegido por PIN -->
+    <div id="adminModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden no-print">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <button onclick="closeAdminModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <!-- Paso 1: Pedir PIN -->
+            <div id="pinStep">
+                <div class="text-center mb-6">
+                    <div class="bg-amber-500/10 text-amber-400 p-3 rounded-full inline-block mb-3 border border-amber-500/20">
+                        <i class="fa-solid fa-user-shield text-2xl"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white">Acceso Administrador</h3>
+                    <p class="text-xs text-slate-400">Ingresa tu clave PIN para modificar las tarifas</p>
+                </div>
+
+                <div class="mb-4">
+                    <input type="password" id="pinInput" placeholder="Clave PIN (por defecto: 1234)" 
+                        class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-center text-lg font-bold tracking-widest text-white focus:outline-none focus:border-amber-500">
+                    <p id="pinError" class="text-rose-400 text-xs mt-2 text-center hidden">Clave incorrecta. Inténtalo de nuevo.</p>
+                </div>
+
+                <button onclick="verifyPin()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl shadow-lg transition-all text-sm">
+                    Ingresar
+                </button>
+            </div>
+
+            <!-- Paso 2: Editar Tarifas -->
+            <div id="ratesStep" class="hidden">
+                <div class="text-center mb-5">
+                    <h3 class="text-lg font-bold text-white">Configuración de Tarifas</h3>
+                    <p class="text-xs text-slate-400">Modifica los valores base de cálculo</p>
+                </div>
+
+                <div class="space-y-4 mb-6">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Mínimo de Flete ($)</label>
+                        <input type="number" id="cfgMinRate" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Valor por Km ($)</label>
+                        <input type="number" id="cfgKmRate" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Valor por Piso de Escalera ($)</label>
+                        <input type="number" id="cfgFloorRate" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-amber-500">
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-700">
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Cambiar Clave PIN</label>
+                        <input type="password" id="cfgNewPin" placeholder="Nueva clave PIN (opcional)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+                    </div>
+                </div>
+
+                <button onclick="saveRates()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all text-sm">
+                    Guardar Nuevas Tarifas
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let RATES = {
+            min: parseFloat(localStorage.getItem('fletes_min')) || 15000,
+            km: parseFloat(localStorage.getItem('fletes_km')) || 4000,
+            floor: parseFloat(localStorage.getItem('fletes_floor')) || 4000,
+            pin: localStorage.getItem('fletes_pin') || '1234'
+        };
+
+        let currentCompany = 'Isa';
+        let map, routeLayer, originMarker, destMarker;
+
+        const DEPOSITO_ADDR = "Marco Avellaneda 1150, San Miguel de Tucumán";
+        const TERMINAL_ADDR = "Av. Brígido Terán 250, San Miguel de Tucumán";
+
+        const PRESET_COORDS = {
+            deposito: [-26.8228, -65.2103],
+            terminal: [-26.8322, -65.1945]
+        };
+
+        window.onload = function() {
+            initMap();
+            updateLabelRates();
+            recalculateTotal();
+        };
+
+        function updateLabelRates() {
+            document.getElementById('lblMinRate').innerText = `$${RATES.min.toLocaleString('es-AR')}`;
+            document.getElementById('lblKmRate').innerText = `$${RATES.km.toLocaleString('es-AR')}`;
+            document.getElementById('lblFloorRate').innerText = `$${RATES.floor.toLocaleString('es-AR')}`;
+        }
+
+        function initMap() {
+            map = L.map('map').setView([-26.83, -65.20], 13);
+
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri',
+                maxZoom: 18
+            }).addTo(map);
+        }
+
+        function setCompany(name) {
+            currentCompany = name;
+            document.getElementById('companyLabel').innerText = `Transporte ${name}`;
+            
+            const btnIsa = document.getElementById('btnIsa');
+            const btnMocho = document.getElementById('btnMocho');
+
+            if(name === 'Isa') {
+                btnIsa.className = "px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 bg-amber-500 text-slate-950 shadow-md";
+                btnMocho.className = "px-4 py-2 rounded-lg font-semibold text-sm text-slate-400 hover:text-white transition-all duration-200";
+            } else {
+                btnMocho.className = "px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 bg-amber-500 text-slate-950 shadow-md";
+                btnIsa.className = "px-4 py-2 rounded-lg font-semibold text-sm text-slate-400 hover:text-white transition-all duration-200";
+            }
+            recalculateTotal();
+        }
+
+        function setPresetOrigin(type) {
+            if(type === 'deposito') {
+                document.getElementById('originInput').value = DEPOSITO_ADDR;
+            } else if(type === 'terminal') {
+                document.getElementById('originInput').value = TERMINAL_ADDR;
+            }
+        }
+
+        function changeFloors(delta) {
+            const input = document.getElementById('floorsInput');
+            let val = parseInt(input.value) + delta;
+            if(val < 0) val = 0;
+            input.value = val;
+            recalculateTotal();
+        }
+
+        async function calculateRoute() {
+            const originText = document.getElementById('originInput').value.trim();
+            const destText = document.getElementById('destinationInput').value.trim();
+
+            if(!destText) {
+                alert("Por favor, ingresa la dirección de destino.");
+                return;
+            }
+
+            const btn = document.getElementById('btnCalcRoute');
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Obteniendo Ruta...`;
+            btn.disabled = true;
+
+            try {
+                let originCoords = await geocodeAddress(originText);
+                if(!originCoords) {
+                    if(originText.includes("1150")) originCoords = PRESET_COORDS.deposito;
+                    else if(originText.includes("250")) originCoords = PRESET_COORDS.terminal;
+                    else originCoords = PRESET_COORDS.deposito;
+                }
+
+                let destCoords = await geocodeAddress(destText + ", Tucuman, Argentina");
+                if(!destCoords) {
+                    alert("No se pudo ubicar la dirección de destino. Intenta incluir la ciudad (ej: Yerba Buena, San Pablo).");
+                    btn.innerHTML = `<i class="fa-solid fa-route"></i> Calcular Ruta y Distancia`;
+                    btn.disabled = false;
+                    return;
+                }
+
+                const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${originCoords[1]},${originCoords[0]};${destCoords[1]},${destCoords[0]}?overview=full&geometries=geojson`;
+                const response = await fetch(osrmUrl);
+                const data = await response.json();
+
+                if(data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const km = (route.distance / 1000).toFixed(1);
+
+                    document.getElementById('kmInput').value = km;
+                    document.getElementById('routeKmBadge').innerText = `${km} km`;
+
+                    renderMapRoute(route.geometry.coordinates, originCoords, destCoords);
+                    recalculateTotal();
+                } else {
+                    alert("No se encontró ruta vial entre los dos puntos.");
+                }
+
+            } catch(e) {
+                console.error(e);
+                alert("Error de conexión al calcular ruta. Puedes ingresar la distancia en Km manualmente.");
+            } finally {
+                btn.innerHTML = `<i class="fa-solid fa-route"></i> Calcular Ruta y Distancia`;
+                btn.disabled = false;
+            }
+        }
+
+        async function geocodeAddress(query) {
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                if(data && data.length > 0) {
+                    return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+                }
+            } catch(e) {
+                return null;
+            }
+            return null;
+        }
+
+        function renderMapRoute(geojsonCoords, origin, dest) {
+            if(routeLayer) map.removeLayer(routeLayer);
+            if(originMarker) map.removeLayer(originMarker);
+            if(destMarker) map.removeLayer(destMarker);
+
+            const latLngs = geojsonCoords.map(c => [c[1], c[0]]);
+
+            routeLayer = L.polyline(latLngs, {
+                color: '#f59e0b',
+                weight: 5,
+                opacity: 0.8
+            }).addTo(map);
+
+            originMarker = L.marker(origin).addTo(map).bindPopup("Origen");
+            destMarker = L.marker(dest).addTo(map).bindPopup("Destino");
+
+            map.fitBounds(routeLayer.getBounds(), { padding: [30, 30] });
+        }
+
+        function recalculateTotal() {
+            const km = parseFloat(document.getElementById('kmInput').value) || 0;
+            const floors = parseInt(document.getElementById('floorsInput').value) || 0;
+            const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+
+            let calculatedKmPrice = km * RATES.km;
+            let appliedKmPrice = Math.max(calculatedKmPrice, RATES.min);
+            let floorsPrice = floors * RATES.floor;
+            let subtotal = appliedKmPrice + floorsPrice;
+            
+            let grandTotal = subtotal - discount;
+            if(grandTotal < 0) grandTotal = 0;
+
+            document.getElementById('totalPrice').innerText = `$${grandTotal.toLocaleString('es-AR')}`;
+
+            let detailHTML = '';
+            if(calculatedKmPrice < RATES.min) {
+                detailHTML += `<div class="flex justify-between text-amber-400 print-text-dark font-semibold">
+                    <span>Distancia (${km} km x $${RATES.km.toLocaleString('es-AR')} = $${calculatedKmPrice.toLocaleString('es-AR')}):</span>
+                    <span>Aplica Mínimo $${RATES.min.toLocaleString('es-AR')}</span>
+                </div>`;
+            } else {
+                detailHTML += `<div class="flex justify-between">
+                    <span>Flete por Distancia (${km} km x $${RATES.km.toLocaleString('es-AR')}):</span>
+                    <span>$${calculatedKmPrice.toLocaleString('es-AR')}</span>
+                </div>`;
+            }
+
+            if(floors > 0) {
+                detailHTML += `<div class="flex justify-between text-slate-300 print-text-dark">
+                    <span>Subida de Pisos (${floors} piso/s x $${RATES.floor.toLocaleString('es-AR')}):</span>
+                    <span>+$${floorsPrice.toLocaleString('es-AR')}</span>
+                </div>`;
+            }
+
+            if(discount > 0) {
+                detailHTML += `<div class="flex justify-between text-emerald-400 print-text-dark font-semibold border-t border-slate-700/50 pt-1 mt-1">
+                    <span>Bonificación / Descuento:</span>
+                    <span>-$${discount.toLocaleString('es-AR')}</span>
+                </div>`;
+            }
+
+            document.getElementById('calculationDetail').innerHTML = detailHTML;
+        }
+
+        function sendWhatsApp() {
+            const km = document.getElementById('kmInput').value;
+            const floors = document.getElementById('floorsInput').value;
+            const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+            const origin = document.getElementById('originInput').value;
+            const dest = document.getElementById('destinationInput').value || 'A confirmar';
+            const total = document.getElementById('totalPrice').innerText;
+
+            let msg = `🚚 *PRESUPUESTO DE FLETE - TRANSPORTE ${currentCompany.toUpperCase()}*\n\n`;
+            msg += `📍 *Origen:* ${origin}\n`;
+            msg += `🏁 *Destino:* ${dest}\n`;
+            msg += `📏 *Distancia:* ${km} km (Ida)\n`;
+            if(parseInt(floors) > 0) {
+                msg += `🪜 *Pisos por escalera:* ${floors} ($${RATES.floor.toLocaleString('es-AR')}/piso)\n`;
+            }
+            if(discount > 0) {
+                msg += `🏷️ *Bonificación aplicada:* -$${discount.toLocaleString('es-AR')}\n`;
+            }
+            msg += `\n💰 *TOTAL ESTIMADO:* ${total}\n\n`;
+            msg += `_Quedamos a disposición para coordinar el horario._`;
+
+            const encoded = encodeURIComponent(msg);
+            window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+        }
+
+        function printBudget() {
+            const origin = document.getElementById('originInput').value;
+            const dest = document.getElementById('destinationInput').value || 'A confirmar';
+            const now = new Date();
+
+            document.getElementById('printTitleCompany').innerText = `PRESUPUESTO DE FLETE - TRANSPORTE ${currentCompany.toUpperCase()}`;
+            document.getElementById('printOrigin').innerText = origin;
+            document.getElementById('printDest').innerText = dest;
+            document.getElementById('printDate').innerText = `Fecha de emisión: ${now.toLocaleDateString('es-AR')} ${now.toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}`;
+
+            window.print();
+        }
+
+        // --- Funciones de Administración ---
+        function openAdminModal() {
+            document.getElementById('adminModal').classList.remove('hidden');
+            document.getElementById('pinStep').classList.remove('hidden');
+            document.getElementById('ratesStep').classList.add('hidden');
+            document.getElementById('pinInput').value = '';
+            document.getElementById('pinError').classList.add('hidden');
+        }
+
+        function closeAdminModal() {
+            document.getElementById('adminModal').classList.add('hidden');
+        }
+
+        function verifyPin() {
+            const enteredPin = document.getElementById('pinInput').value;
+            if(enteredPin === RATES.pin) {
+                document.getElementById('pinStep').classList.add('hidden');
+                document.getElementById('ratesStep').classList.remove('hidden');
+
+                document.getElementById('cfgMinRate').value = RATES.min;
+                document.getElementById('cfgKmRate').value = RATES.km;
+                document.getElementById('cfgFloorRate').value = RATES.floor;
+            } else {
+                document.getElementById('pinError').classList.add('hidden');
+            }
+        }
+
+        function saveRates() {
+            const newMin = parseFloat(document.getElementById('cfgMinRate').value) || RATES.min;
+            const newKm = parseFloat(document.getElementById('cfgKmRate').value) || RATES.km;
+            const newFloor = parseFloat(document.getElementById('cfgFloorRate').value) || RATES.floor;
+            const newPin = document.getElementById('cfgNewPin').value.trim();
+
+            RATES.min = newMin;
+            RATES.km = newKm;
+            RATES.floor = newFloor;
+
+            localStorage.setItem('fletes_min', newMin);
+            localStorage.setItem('fletes_km', newKm);
+            localStorage.setItem('fletes_floor', newFloor);
+
+            if(newPin) {
+                RATES.pin = newPin;
+                localStorage.setItem('fletes_pin', newPin);
+            }
+
+            updateLabelRates();
+            recalculateTotal();
+            closeAdminModal();
+            alert("¡Tarifas actualizadas correctamente!");
+        }
+    </script>
+</body>
+</html>
